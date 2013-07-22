@@ -1,0 +1,75 @@
+#!/usr/bin/env python
+import argparse
+import socket
+
+def main():
+    p = argparse.ArgumentParser(prog='host-search', description='Finds words that have a certain suffix.')
+
+    p.add_argument('--words', type=argparse.FileType('r'), default='/etc/dictionaries-common/words',
+      help='A file that contains a sorted set of words separated by newlines.')
+    p.add_argument('--strong-match', choices=['y', 'n'], default='y',
+      help='Whether or not to ignore words that become fragments without their suffix.')
+    p.add_argument('--unregistered', choices=['y', 'n'], default='n',
+      help='Whether or not to ignore results that are already registered hosts.')
+    p.add_argument('tlds', nargs='+', metavar='tld',
+      help='The tld to be searched for.')
+
+    args = p.parse_args()
+
+    with args.words as words:
+
+        matches = words_ending_with(words, args.tlds)
+
+        if args.strong_match == 'y':
+            words.seek(0)
+            matches = strong_matches(words, matches)
+
+        if args.unregistered == 'y':
+            matches = unregistered_matches(matches)
+
+        print_results(by_tld(matches))
+
+def words_ending_with(words, tlds):
+    return ((w.strip()[:-len(s.replace('.', ''))], s) for w in words for s in tlds if w.strip().endswith(s.replace('.', '')))
+
+def strong_matches(words, matches):
+    word, stop = move(words)
+    for matched,tld in matches:
+        if stop:
+            return
+        if matched == word:
+            yield (matched, tld)
+        else:
+            word, stop = move(words)
+
+def move(words):
+    word = next(words, None)
+    return ((word or '').strip(), word is None)
+
+def unregistered_matches(matches):
+    for m in matches:
+        try:
+            socket.getaddrinfo('%s.%s' % m, 80)
+        except socket.gaierror as e:
+            if e.errno == -2:
+                yield m
+            else:
+                raise
+
+def by_tld(matches):
+    result = {}
+    for matched,tld in matches:
+        if tld in result:
+            result[tld].append(matched)
+        else:
+            result[tld] = [matched]
+    return result
+
+def print_results(matches):
+    for tld in matches:
+        print '\n%s:' % tld
+        for matched in matches[tld]:
+            print '\t%s' % matched
+
+if __name__ == '__main__':
+    main()

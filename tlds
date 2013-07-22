@@ -1,0 +1,8 @@
+#!/usr/bin/env python
+import re
+import urllib2
+
+req = urllib2.Request('http://mxr.mozilla.org/mozilla-central/source/netwerk/dns/effective_tld_names.dat?raw=1')
+response = urllib2.urlopen(req)
+page = response.read()
+print '\n'.join((tld for tld in page.split('\n') if not ('//' in tld or '!' in tld or '*' in tld or ' ' in tld or len(tld.strip()) == 0)))
